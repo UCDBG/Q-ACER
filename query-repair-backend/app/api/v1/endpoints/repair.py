@@ -27,7 +27,7 @@ DEFAULT_OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "./output")).resolve()
 
 # A small, shared, persistent job store on Azure App Service.
 # /home is a persistent volume and available to all workers on the app.
-JOB_STORE_DIR = Path(os.getenv("JOB_STORE_DIR", "/home/query-repair-jobs")).resolve()
+JOB_STORE_DIR = Path(os.getenv("JOB_STORE_DIR", "./query-repair-jobs")).resolve()
 os.makedirs(JOB_STORE_DIR, exist_ok=True)
 
 # ---- helpers for JSON job store ----
@@ -98,6 +98,8 @@ def _run_job(job_id: str, req: RepairRequest, output_dir: Path) -> None:
             message="Repair run completed.",
             files=results.get("files"),
             previews=results.get("previews"),
+            # files=[str(p) for p in output_dir.glob("*") if p.is_file()],
+            # previews={},  # skip previews
             output_dir=str(output_dir),
         )
         # Persist final status to shared store
