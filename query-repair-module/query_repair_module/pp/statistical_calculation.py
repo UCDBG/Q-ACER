@@ -3,6 +3,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import re
 import os
+# import ast
 
 class statistical_calculation:
     def __init__(self):
@@ -25,7 +26,14 @@ class statistical_calculation:
             """
             Evaluate a condition and return the filtered DataFrame.
             """
-            cond = cond.replace('"', '')  # Remove quotes for direct column access
+            if cond is None:
+                return df
+
+            cond = cond.replace('"', '').strip()  # Remove quotes for direct column access
+
+            if cond == '':
+                return df
+
             # Split condition by logical operators (and/or)
             conditions = re.split(r'\s+(and|or)\s+', cond)
             mask = np.ones(len(df), dtype=bool)
@@ -77,8 +85,13 @@ class statistical_calculation:
         # Parse the expression
         parts = expression.split('(')
         func_name = parts[0].strip()
-        args = parts[1].strip()[:-1]  # Remove trailing ")"
-        args = [arg.strip().replace('"', '') for arg in args.split(',')]
+        args_str = parts[1].strip()[:-1].strip()  # Remove trailing ")"
+
+        # Handle count()
+        if func_name == 'count' and args_str == '':
+            return len(df)
+
+        args = [arg.strip().replace('"', '') for arg in args_str.split(',')]
 
         # Evaluate based on number of arguments
         if len(args) == 1:
@@ -161,19 +174,29 @@ class statistical_calculation:
 
         return result
 
-    def statistical_calculation(self, cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num):
+    def statistical_calculation(self, cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num):
         statistical_tree = []
 
         # Define the dynamic file name
-        file_name = f"statistical_info_Q{query_num}_{dataName}_{dataSize}.csv"
+        file_name = f"statistical_info_Q{query_num}_{dataName}_{dataSize}_{const_num}_{constraint_columns}.csv"
 
         # Check if the file exists'''
-        '''
         if os.path.exists(file_name):
             print(f"File '{file_name}' already exists. Reading from the file...")
             df_statistical_info = pd.read_csv(file_name)
-            return df_statistical_info
-        '''
+            
+            # # Predicates points uses numpy format (space-separated)
+            # df_statistical_info['Predicates points'] = df_statistical_info['Predicates points'].apply(
+            #     lambda x: np.array(ast.literal_eval(x.replace('  ', ' ').replace(' ', ',')))
+            #     if isinstance(x, str) else x
+            # )
+
+            # # Data_Min and Data_Max are standard Python lists
+            # df_statistical_info['Data_Min'] = df_statistical_info['Data_Min'].apply(ast.literal_eval)
+            # df_statistical_info['Data_Max'] = df_statistical_info['Data_Max'].apply(ast.literal_eval)
+            
+            return df_statistical_info.to_dict('records')
+
         # Parallelize processing using ThreadPoolExecutor
         def process_cluster(clusters):
             data_points_array = np.array(clusters['Data points'])

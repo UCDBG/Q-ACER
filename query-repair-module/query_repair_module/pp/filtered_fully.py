@@ -76,6 +76,7 @@ class filtered_fully:
             operators = []
             for ref in refinement['refinements']:
                 conditions.append(ref['value'])
+                # conditions.append(float(ref['value']))
                 operators.append(ref['operator'])
 
             #print(conditions)
@@ -167,7 +168,7 @@ class filtered_fully:
         # For the second file
         file_path_2 = os.path.join(
             output_directory, 
-            f"satisfied_conditions_Fully_{dataName}_size{datasize}_query{query_num}_constraint{constraint}.csv"
+            f"satisfied_conditions_Fully_{dataName}_size{datasize}_query{query_num}_constraint{constraint}_{const_num}.csv"
         )
         satisfied_conditions_df.to_csv(file_path_2, index=False)
 
@@ -205,7 +206,7 @@ class filtered_fully:
         os.makedirs(output_directory, exist_ok=True)
 
         # Define the full file path including the directory
-        file_path = os.path.join(output_directory, f"Run_info_{dataName}_size{datasize}_constraint{const_num}.csv")
+        file_path = os.path.join(output_directory, f"run_info_{dataName}_size{datasize}_constraint{const_num}.csv")
 
         write_header = not os.path.exists(file_path)  # Write header only if the file does not exist
 

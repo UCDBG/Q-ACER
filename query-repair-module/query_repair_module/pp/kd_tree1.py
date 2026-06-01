@@ -1,5 +1,6 @@
 import pandas as pd
 import heapq
+import json
 
 class kd_tree1:
     def __init__(self, points, dim, bucket_size, branches, dist_sq_func=None):
@@ -116,4 +117,23 @@ class kd_tree1:
 
         return recurse(self._root)
 
+    def save_to_json(self, filename):
+        # filename = filename.replace(" ", "_").replace(",", "_")
+        with open(filename, 'w') as f:
+            json.dump(self._root, f)
+
+    @staticmethod
+    def load_from_json(filename):
+        with open(filename, 'r') as f:
+            return json.load(f)
+
+    @staticmethod
+    def flatten_from_root(node):
+        if not node:
+            return []
+        flattened = [node]
+        if 'children' in node and node['children']:
+            for child in node['children']:
+                flattened.extend(kd_tree1.flatten_from_root(child))
+        return flattened
 

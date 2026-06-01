@@ -20,6 +20,11 @@ class ExpressionEvaluator1:
         # Helper function to parse and evaluate conditions
         def eval_cond(df, cond):
             cond = cond.replace('"', '')  # Remove quotes for direct column access
+
+            # count() / empty condition means all rows
+            if cond == '':
+                return df, []
+
             # Extract column names using a regex pattern
             columns = re.findall(r'\b\w+\b', cond)
             unique_columns = [col for col in columns if col in df.columns]  # Validate columns
@@ -28,11 +33,22 @@ class ExpressionEvaluator1:
 
         # Define aggregation function mappings
         aggregation_functions = {
-            'count': lambda cond=None, col=None: df[col].count() if col else eval_cond(df, cond)[0].shape[0],
-            'sum': lambda cond=None, col=None: df[col].sum() if col else eval_cond(df, cond)[0][col].sum(),
-            'mean': lambda cond=None, col=None: df[col].mean() if col else eval_cond(df, cond)[0][col].mean(),
-            'min': lambda cond=None, col=None: df[col].min() if col else eval_cond(df, cond)[0][col].min(),
-            'max': lambda cond=None, col=None: df[col].max() if col else eval_cond(df, cond)[0][col].max(),        
+            # 'count': lambda cond=None, col=None: df[col].count() if col else eval_cond(df, cond)[0].shape[0],
+            # 'sum': lambda cond=None, col=None: df[col].sum() if col else eval_cond(df, cond)[0][col].sum(),
+            # 'mean': lambda cond=None, col=None: df[col].mean() if col else eval_cond(df, cond)[0][col].mean(),
+            # 'min': lambda cond=None, col=None: df[col].min() if col else eval_cond(df, cond)[0][col].min(),
+            # 'max': lambda cond=None, col=None: df[col].max() if col else eval_cond(df, cond)[0][col].max(),        
+            'count': lambda cond=None, col=None: len(df) if cond in (None, '') and col is None
+                                        else df[col].count() if col and cond in (None, '')
+                                        else eval_cond(df, cond)[0].shape[0],
+            'sum':   lambda cond=None, col=None: df[col].sum() if col and cond in (None, '')
+                                                else eval_cond(df, cond)[0][col].sum(),
+            'mean':  lambda cond=None, col=None: df[col].mean() if col and cond in (None, '')
+                                                else eval_cond(df, cond)[0][col].mean(),
+            'min':   lambda cond=None, col=None: df[col].min() if col and cond in (None, '')
+                                                else eval_cond(df, cond)[0][col].min(),
+            'max':   lambda cond=None, col=None: df[col].max() if col and cond in (None, '')
+                                                else eval_cond(df, cond)[0][col].max(),
        }
 
         # Parse the expression
@@ -42,6 +58,12 @@ class ExpressionEvaluator1:
 
         func_name, args = match.groups()
         func_name = func_name.strip()  # Extract function name
+        args_str = args_str.strip()
+
+        # Handle count()
+        if func_name == 'count' and args_str == '':
+            return len(df)
+
         args = [arg.strip().replace('"', '') for arg in args.split(',')]  # Clean arguments
 
         # Handle different argument lengths

@@ -16,6 +16,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# List the URLs where your React app is running
+# origins = [
+#     "http://localhost:3000", # Local development
+# ]
+
 # Optional: allow frontend (e.g., React) to talk to this API
 app.add_middleware(
     CORSMiddleware,

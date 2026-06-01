@@ -8,7 +8,8 @@ import os
 class Dataframe:
     def __init__(self, seed=42):
         np.random.seed(seed)  
-        self.DATASETS_DIR = Path(os.getenv("DATASETS_DIR", "/app/datasets"))
+        # self.DATASETS_DIR = Path(os.getenv("DATASETS_DIR", "/app/datasets"))
+        self.DATASETS_DIR = Path(os.getenv("DATASETS_DIR", "/Users/shek21/ResearchApps/fairness-demo/query-repair-backend/app/datasets"))
 
     def getDataframe_TPCH(self, size):
         base = self.DATASETS_DIR

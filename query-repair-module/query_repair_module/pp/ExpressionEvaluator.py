@@ -10,6 +10,10 @@ class ExpressionEvaluator:
         def eval_cond(df, cond):
             cond = cond.replace('"', '')  # Remove quotes for direct column access
             
+            # count() / empty condition means all rows
+            if cond == '':
+                return df, []
+
             # Attempt to find all column names using a simple regex pattern
             columns = re.findall(r'\b\w+\b(?=\s*==|\s*>=|\s*<=|\s*!=|\s*<|\s*>)', cond)
             unique_columns = list(set(columns))  # Remove duplicates
@@ -29,8 +33,13 @@ class ExpressionEvaluator:
         # This is a simplistic parser, assumes format func("condition") or func("condition", "column")
         parts = expression.split('(')
         func_name = parts[0].strip()
-        args = parts[1].strip()[:-1]  # remove trailing ")"
-        args = [arg.strip() for arg in args.split(',')]
+        args_str = parts[1].strip()[:-1]  # remove trailing ")"
+
+        # Handle count()
+        if func_name == 'count' and args_str == '':
+            return len(df)
+
+        args = [arg.strip() for arg in args_str.split(',')]
 
         if len(args) == 1:
             result = aggregation_functions[func_name](args[0])

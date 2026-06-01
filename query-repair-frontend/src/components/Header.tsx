@@ -12,7 +12,7 @@ export default function Header() {
       <Toolbar>
         {/* App title */}
         <Typography variant="h6" color="inherit" sx={{ flexGrow: 1 }}>
-          Query Repair System
+          Q-ACER: Query Aggregate Constraint Efficient Repair System
         </Typography>
         {showHome && (
           <Tooltip title="Home">

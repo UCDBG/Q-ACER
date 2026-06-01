@@ -332,7 +332,7 @@ class filtered_with_Ranges_generalize_topK1_norm:
         os.makedirs(output_directory, exist_ok=True)
 
         # Define the full file path including the directory
-        file_path = os.path.join(output_directory, f"Run_info_{dataName}_Varience.csv")
+        file_path = os.path.join(output_directory, f"run_info_{dataName}_Varience.csv")
 
         write_header = not os.path.exists(file_path)  # Write header only if the file does not exist
 

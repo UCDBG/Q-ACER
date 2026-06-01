@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 // Material UI
 import {
   Container,
@@ -27,7 +27,7 @@ import Papa from "papaparse";
 import DatasetPreview from "../features/DatasetPreview";
 import DatasetSchema from "../features/DatasetSchema";
 // Navigation
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 // Alerts
 import AppAlert from "../components/AppAlert";
 
@@ -51,7 +51,8 @@ type Dataset = {
   file?: string; // single CSV
   files?: Record<string, string>; // multi-CSV (tpch)
 };
-const API_BASE = "https://query-repair-fqepd3crc9h9ggdh.uksouth-01.azurewebsites.net"
+// const API_BASE = "https://query-repair-fqepd3crc9h9ggdh.uksouth-01.azurewebsites.net"
+const API_BASE = "http://localhost:8000"
 // ---------- Datasets ----------
 const datasetConfig: Dataset[] = [
   {
@@ -132,6 +133,7 @@ export default function InputPage() {
     useState<string>("");
   const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+  const location = useLocation();
   const [topK, setTopK] = useState<number>(7);
   const [isRepairing, setIsRepairing] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
@@ -176,7 +178,7 @@ export default function InputPage() {
 
   async function pollStatus(
     fullStatusUrl: string,
-    { interval = 120_000, timeout = 90 * 60_000 } = {} 
+    { interval = 10_000, timeout = 90 * 60_000 } = {} 
   ) {
     const start = Date.now();
     while (true) {
@@ -473,6 +475,36 @@ export default function InputPage() {
       ensureDatasetSelected(e);
     },
   };
+
+
+  // handling edit query and constraint from the result page
+  useEffect(() => {
+    // If navigating fresh from homepage, skip restore
+    if (location.state?.fresh) return;
+
+    const stored = localStorage.getItem("queryRepairData");
+    console.log("stored:", stored);  // check if data exists
+
+    if (!stored) return;
+    const parsed = JSON.parse(stored);
+    console.log("parsed:", parsed);  // check what's being restored
+
+    if (parsed.datasetId) {
+      setSelectedDatasetId(parsed.datasetId);
+      // Also reload the dataset preview
+      const dataset = datasetConfig.find((d) => d.id === parsed.datasetId);
+      if (dataset?.file) {
+        loadSingleCsvDataset(dataset.file);
+      } else if (dataset?.files) {
+        loadTpchDataset(dataset.files);
+      }
+    }
+    if (parsed.constraintExpr) setAggregateConstraintExpr(parsed.constraintExpr);
+    if (parsed.topK) setTopK(parsed.topK);
+    if (parsed.aggregations) setAggregations(parsed.aggregations);
+    if (parsed.constraints) setConstraints(parsed.constraints);
+  }, []);
+  
 
   // ---------- Render ----------
   return (
@@ -922,6 +954,8 @@ export default function InputPage() {
               aggregations: aggregatedWithPredicates,
               constraintExpr: aggregateConstraintExpr,
               topK,
+              constraints,
+              const_num: aggregations.length,
             })
           );
 
@@ -951,9 +985,12 @@ export default function InputPage() {
                 selectedDataset?.id == "TPCH"
                   ? [aggregateConstraintExpr]
                   : aggregateConstraintExpr,
-              const_num: 3,
+              // const_num: 3,
+              const_num: aggregations.length
             },
-            output_dir: "C:/Query-Repair-System/Exp",
+            // output_dir: "C:/Query-Repair-System/Exp",
+            // output_dir: "/Users/shek21/ResearchApps/fairness-demo/query-repair-backend/Exp",
+            output_dir: "output"
           };
 
           try {

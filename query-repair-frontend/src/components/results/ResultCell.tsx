@@ -10,7 +10,7 @@ const failColor = (theme: any) => theme.palette.error.main;
 const warnColor = (theme: any) => theme.palette.warning.main;
 
 function barDomainMax(value: number, b: Bounds): number {
-  const candidates = [value, ...(b.lb != null ? [b.lb] : []), ...(b.ub != null && b.ub < 1 ? [b.ub] : []), 0.05];
+  const candidates = [value, ...(b.lb != null ? [b.lb] : []), ...(b.ub != null ? [b.ub] : []), 0.05];
   return Math.max(...candidates);
 }
 

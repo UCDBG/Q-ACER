@@ -7,8 +7,9 @@ import {
   Divider,
   LinearProgress,
   Alert,
+  Button,
 } from "@mui/material";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { MetricLabel } from "../components/common/InfoMetric";
 import { StatBar } from "../components/common/StatBar";
@@ -29,7 +30,8 @@ type ParsedResults = {
   original_pass?: boolean | null;
 };
 const API_BASE =
-  "https://query-repair-fqepd3crc9h9ggdh.uksouth-01.azurewebsites.net";
+  // "https://query-repair-fqepd3crc9h9ggdh.uksouth-01.azurewebsites.net";
+  "http://localhost:8000"
 
 export default function ResultsPage() {
   const location = useLocation();
@@ -37,6 +39,7 @@ export default function ResultsPage() {
   const [sqlQuery, setSqlQuery] = useState("");
   const [aggregations, setAggregations] = useState<any[]>([]);
   const [constraintExpr, setConstraintExpr] = useState<string>("");
+  const [constNum, setConstNum] = useState<number | null>(null); 
 
   const [artifacts, setArtifacts] = useState<ParsedResults | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -74,17 +77,35 @@ export default function ResultsPage() {
     outputDir: outputDirFromState,
   } = (location.state as any) || {};
 
+  const navigate = useNavigate();
+
   const asPercent = (value: number, max: number) =>
     max <= 0 ? 0 : Math.min(100, Math.round((value / max) * 100));
 
   useEffect(() => {
+    let constNumValue: number | null = null;
+    let constraintExprValue = "";
+
     const stored = localStorage.getItem("queryRepairData");
     if (stored) {
       const parsed = JSON.parse(stored);
       setSqlQuery(parsed.sqlQuery || "");
       setAggregations(parsed.aggregations || []);
       setConstraintExpr(parsed.constraintExpr || "");
+      constraintExprValue = parsed.constraintExpr || "";
+      if (parsed.const_num) {
+        constNumValue = parsed.const_num;  // store locally
+        setConstNum(parsed.const_num);     // also update state for other uses
+      }
     }
+
+    console.log("datasetName:", datasetName);
+    console.log("constNumValue:", constNumValue);
+    console.log("constraintExprValue:", constraintExprValue);
+
+    const url = 
+      `${API_BASE}/api/v1/results?dataset=${datasetName}${constNumValue !== null ? `&const_num=${constNumValue}` : ""}${constraintExprValue ? `&constraint=${encodeURIComponent(constraintExprValue)}` : ""}`
+    console.log("fetch URL:", url);
 
     const outputDir =
       outputDirFromState || localStorage.getItem("qrOutputDir") || "";
@@ -97,11 +118,26 @@ export default function ResultsPage() {
     (async () => {
       try {
         setLoading(true);
+
+        // // Check localStorage cache first
+        // const cacheKey = `resultsCache_${datasetName}_${constNumValue}`;
+        // const cached = localStorage.getItem(cacheKey);
+        // if (cached) {
+        //   setArtifacts(JSON.parse(cached));
+        //   setLoading(false);
+        //   return;
+        // }
+
         const res = await fetch(
-          `${API_BASE}/api/v1/results?dataset=${datasetName}`
+          url
+          // `${API_BASE}/api/v1/results?dataset=${datasetName}`
+          // `${API_BASE}/api/v1/results?dataset=${datasetName}${constNumValue !== null ? `&const_num=${constNumValue}` : ""}${constraintExprValue ? `&constraint=${encodeURIComponent(constraintExpr)}` : ""}`
         );
         if (!res.ok) throw new Error(await res.text());
         const data: ParsedResults = await res.json();
+
+        // // Cache the result
+        // localStorage.setItem(cacheKey, JSON.stringify(data));
         setArtifacts(data);
       } catch (e: any) {
         setError(e?.message || "Failed to load results");
@@ -114,9 +150,26 @@ export default function ResultsPage() {
   // ----- RunInfo matching (SQL ↔ RunInfo) -----
   const runInfoRows = artifacts?.run_info || [];
   const sigSql = signatureFromSql(sqlQuery);
-  const matchingRunInfo = runInfoRows.filter(
-    (r) => signatureFromRunInfo(String(r["Query"] || "")) === sigSql
-  );
+  // const matchingRunInfo = runInfoRows.filter(
+  //   (r) => signatureFromRunInfo(String(r["Query"] || "")) === sigSql
+  // );
+
+  const matchingRunInfo = runInfoRows.filter((r) => {
+    // 1. Generate signatures for debugging
+    const rowSig = signatureFromRunInfo(String(r["Query"] || ""));
+    
+    // // 2. Print the content of r and the comparison result
+    // console.log("--- Filtering Row ---");
+    // console.log("Row Content (r):", r);
+    // console.log("Row Signature:", rowSig);
+    // console.log("SQL Signature (Target):", sigSql);
+    // console.log("Match Found:", rowSig === sigSql);
+
+    // 3. Return the comparison so the filter still works
+    return rowSig === sigSql;
+  });
+
+  console.log("Full Artifacts Array:", runInfoRows);
 
   const hasRunMatch = matchingRunInfo.length > 0;
   const fullyRow = hasRunMatch
@@ -127,9 +180,11 @@ export default function ResultsPage() {
     : undefined;
   const anyRow = hasRunMatch ? matchingRunInfo[0] : undefined;
 
+  const combinations = Number(anyRow?.["Combinations Num"] ?? NaN);
+
   const runtimeFF = Number(fullyRow?.["Time"] ?? 0);
   const runtimeRP = Number(rangesRow?.["Time"] ?? 0);
-  const runtimeMax = Math.max(runtimeFF || 0, runtimeRP || 0, 1);
+  const runtimeMax = Math.max(runtimeFF || 0, runtimeRP || 0, 200);
 
   const nceFF = Number(fullyRow?.["Checked Num"] ?? 0);
   const nceRP = Number(rangesRow?.["Checked Num"] ?? 0);
@@ -145,14 +200,21 @@ export default function ResultsPage() {
   const distFFpct = Math.max(0, Math.min(100, Math.round(distFF * 100)));
   const distRPpct = Math.max(0, Math.min(100, Math.round(distRP * 100)));
 
-  const combinations = Number(anyRow?.["Combinations Num"] ?? NaN);
-
   const constraintStr = String(
     anyRow?.["Arithmetic Expression"] ??
       anyRow?.["Constraint"] ?? // keep as backup if your CSV still has this
       ""
   );
-  const bounds: Bounds = parseConstraintBounds(constraintStr);
+  const bounds: Bounds = parseConstraintBounds(constraintExpr || constraintStr);
+
+  // dynamic bounds
+  const originalMetricNum = Number(originalMetric);
+  const dynamicBounds: Bounds = {
+    lb: bounds.lb,
+    ub: (originalPassRaw === false && Number.isFinite(originalMetricNum))
+      ? Math.max(bounds.ub ?? 0, originalMetricNum)
+      : bounds.ub
+  };
 
   const maxSimFF = getMaxSimilarity(
     artifacts?.satisfied_conditions_ff || [],
@@ -174,6 +236,13 @@ export default function ResultsPage() {
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           Results
         </Typography>
+        <Button
+          variant="outlined"
+          onClick={() => navigate("/input")}
+          sx={{ borderColor: "rgba(64, 82, 181, 0.8)", color: "rgba(64, 82, 181, 0.8)" }}
+        >
+          Edit
+        </Button>
       </Box>
 
       <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -267,9 +336,11 @@ export default function ResultsPage() {
         Top-k Repaired Queries
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        These are the top-k repaired queries that satisfy the constraint. Lower
-        distance means fewer changes from your original query (closer match).
+        These are the top-k repaired queries that satisfy the constraint.
+        <br />
+        Lower distance means fewer changes from your original query (closer match).
       </Typography>
+      {/*
       <TopKTable
         title="Full Filtering (point estimates)"
         tableCaption="Repairs generated by Full Filtering for the selected dataset and constraint."
@@ -279,9 +350,10 @@ export default function ResultsPage() {
         bounds={bounds}
         maxSim={maxSimFF}
       />
+      */}
       <TopKTable
-        title="Range Pruning (interval estimates)"
-        tableCaption="Repairs generated by Range Pruning for the selected dataset and constraint."
+        // title="Range Pruning (interval estimates)"
+        // tableCaption="Repairs generated by Range Pruning for the selected dataset and constraint."
         rows={artifacts?.satisfied_conditions_rp || []}
         showRangeSatisfaction={false}
         sqlQuery={sqlQuery}
@@ -328,12 +400,14 @@ export default function ResultsPage() {
           </Typography>
 
           {/* bars */}
+          {/*
           <StatBar
             label="Runtime (s) - FF"
             info="Wall-clock time to compute top-k with Full Filtering."
             value={runtimeFF || "—"}
             progress={asPercent(runtimeFF, runtimeMax)}
           />
+          */}
           <StatBar
             label="Runtime (s) - RP"
             info="Wall-clock time to compute top-k with Range Pruning."
@@ -343,27 +417,31 @@ export default function ResultsPage() {
             mb={3}
           />
 
+          {/*
           <StatBar
             label="NCE (checks) - FF"
             info="Constraint evaluations performed; lower means more pruning."
             value={nceFF}
             progress={asPercent(nceFF, Math.max(nceFF, nceRP, 1))}
           />
+          */}
           <StatBar
             label="NCE (checks) - RP"
             info="Constraint evaluations on ranges/singletons during RP."
             value={nceRP}
-            progress={asPercent(nceRP, Math.max(nceFF, nceRP, 1))}
+            progress={asPercent(nceRP, Math.max(nceFF, nceRP, combinations))}
             color="secondary"
             mb={3}
           />
 
+          {/*
           <StatBar
             label="NCA (refinements) - FF"
             info="Refinement steps during search; lower is better."
             value={ncaFF}
             progress={asPercent(ncaFF, Math.max(ncaFF, ncaRP, 1))}
           />
+          */}
           <StatBar
             label="NCA (refinements) - RP"
             info="Range splits/refinements performed by RP."
@@ -373,12 +451,14 @@ export default function ResultsPage() {
             mb={3}
           />
 
+          {/*
           <StatBar
             label="Access Num - FF"
             info="How many index/cluster partitions were accessed; lower means less effort."
             value={Number.isFinite(accessFF) ? accessFF.toLocaleString() : "—"}
             progress={asPercent(accessFF, Math.max(accessFF, accessRP, 1))}
           />
+          */}
           <StatBar
             label="Access Num - RP"
             info="Partitions/nodes accessed under RP; lower is better."
@@ -388,12 +468,14 @@ export default function ResultsPage() {
             mb={3}
           />
 
+          {/*
           <StatBar
             label="Search explored (Distance) - FF"
             info="Fraction of candidate space explored; 0-100%. Lower is better."
             value={Number.isFinite(distFF) ? `${distFFpct}%` : "—"}
             progress={distFFpct}
           />
+          */}
           <StatBar
             label="Search explored (Distance) - RP"
             info="Fraction of candidate space explored by RP; lower is better."

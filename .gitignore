@@ -28,3 +28,7 @@ node_modules/
 .next/
 out/
 dist/
+
+query-repair-backend/*.csv
+query-repair-backend/*.json
+query-repair-backend/query-repair-jobs/

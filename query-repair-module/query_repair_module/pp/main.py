@@ -21,6 +21,8 @@ from .ExpressionEvaluator import ExpressionEvaluator
 import matplotlib.pyplot as plt
 import re
 import math
+
+
 def analyze_distribution(df, column):
     plt.figure(figsize=(10, 6))
 
@@ -33,16 +35,29 @@ def analyze_distribution(df, column):
     
     plt.show()
  
-def get_clusters(df_merged, buckestSize, branchNum):
+def get_clusters(df_merged, buckestSize, branchNum, dataName, const_num, constraint_columns):
     start_time = time.time() 
-    KD_tree = kd_tree1(df_merged, 3, buckestSize, branchNum)
-    KD_tree_dict = KD_tree.flatten_tree()
-    KD_tree.save_to_csv("KD_tree.csv")
-    # Save the tree to a CSV file
-    #generator1 = generate_clusters1()
-    #cluster_tree1 = generator1.generating_clusters(df_merged.values)#, n_clusters=None, distance_threshold=20)  # Adjust as needed    
-    #cleaned_clusters = generator1.remove_duplicates(cluster_tree1)
-    #final_cluster_tree = generator1.add_metadata(cleaned_clusters, df_merged.values, cluster_tree1)
+    cols_str = str(constraint_columns)
+    print(f"Constraint Columns: {cols_str}")
+
+    tree_file_path = f"KD_tree_{dataName}_{const_num}_{cols_str}.json"
+
+    if os.path.exists(tree_file_path):
+        print(f"Loading existing KD-tree from {tree_file_path}...")
+        KD_tree = kd_tree1.load_from_json(tree_file_path)
+        KD_tree_dict = kd_tree1.flatten_from_root(KD_tree)
+    else:
+        print("Existing KD-tree not found. Generating new tree...")
+        KD_tree = kd_tree1(df_merged, 3, buckestSize, branchNum)
+        KD_tree_dict = KD_tree.flatten_tree()
+        KD_tree.save_to_json(tree_file_path)
+        # KD_tree.save_to_csv(tree_file_path)
+        # Save the tree to a CSV file
+        #generator1 = generate_clusters1()
+        #cluster_tree1 = generator1.generating_clusters(df_merged.values)#, n_clusters=None, distance_threshold=20)  # Adjust as needed    
+        #cleaned_clusters = generator1.remove_duplicates(cluster_tree1)
+        #final_cluster_tree = generator1.add_metadata(cleaned_clusters, df_merged.values, cluster_tree1)
+
     end_time = time.time() 
     print("Generating clusters time: ", round(end_time - start_time, 3))
 
@@ -74,14 +89,15 @@ def get_convex_hull(cluster_tree):
     #convex_hull.draw_convex_hulls(cluster_tree)
     return hull_info_list
 
-def get_statistical_info(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num):
+def get_statistical_info(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num):
     stat_info = statistical_calculation()
-    stat_tree = stat_info.statistical_calculation(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num)
+    stat_tree = stat_info.statistical_calculation(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num)
+    print(f"Query number: {query_num}")
 
     return stat_tree
 
 def userQuery_Healthcare_Q1(qua, size):
-    query_num = 1
+    query_num = 101
     #getting dataframe
     input = Dataframe()
     df_original, dataName, dataSize = input.getDataframe_Healthcare(size)
@@ -398,6 +414,24 @@ def _sanitize_expressions(expr_in: Union[str, List[str]]) -> Union[str, List[str
     else:
         raise TypeError(f"Unsupported type for expression: {type(expr_in)}")
 
+def _normalize_aggregations(aggregations: dict) -> dict:
+    """
+    Normalize aggregation strings before evaluation.
+    In particular, map count() -> count("__all__")
+    so evaluators never see an empty argument.
+    """
+    normalized = {}
+
+    for name, expr in aggregations.items():
+        e = expr.strip()
+
+        # count()  -> count("__all__")
+        if re.fullmatch(r'count\(\s*\)', e, flags=re.IGNORECASE):
+            normalized[name] = 'count()'
+        else:
+            normalized[name] = e
+
+    return normalized
 
 def resolve_constraint(dataName: str, constraint: list | tuple, constraint_def: dict | None):
     """
@@ -407,7 +441,8 @@ def resolve_constraint(dataName: str, constraint: list | tuple, constraint_def: 
     """
     if constraint_def is not None:
         columns = constraint_def["columns"]
-        aggregations = constraint_def["aggregations"]
+        # aggregations = constraint_def["aggregations"]
+        aggregations = _normalize_aggregations(constraint_def["aggregations"])
         expression = _sanitize_expressions(constraint_def["expression"])  # may be str or list
         print("expression::", expression)
         const_num = int(constraint_def.get("const_num", 0))
@@ -435,6 +470,8 @@ def check_original_query_pass(df_filtered, aggregations, expression):
     """
     from .ExpressionEvaluator import ExpressionEvaluator
     from .ExpressionEvaluator1 import ExpressionEvaluator1
+
+    aggregations = _normalize_aggregations(aggregations)
 
     # pick evaluator by agg functions used
     agg_funcs = " ".join(aggregations.values()).lower()
@@ -487,6 +524,21 @@ def check_original_query_pass(df_filtered, aggregations, expression):
         raise TypeError("expression must be str or list[str]")
 
 
+# With this — extract bounds from the frontend expression:
+def extract_bounds_from_expression(expression):
+    # Handle both str and list
+    expr = expression[0] if isinstance(expression, list) else expression
+    # Match: L <= ... <= U
+    m = re.search(r'^\s*([-\d\.eE]+)\s*<=.+<=\s*([-\d\.eE]+)\s*$', expr)
+    if m:
+        return [[float(m.group(1)), float(m.group(2))]]
+    # Match single-sided: ... <= U or ... >= L
+    m = re.search(r'([-\d\.eE]+)\s*$', expr)
+    if m:
+        return [[0.0, float(m.group(1))]]
+    return [[0.0, 1.0]]  # safe fallback
+
+
 def main(dataName: str = "TPCH",
     Top_k: int = 7,
     predicates: list[dict] | None = None ,
@@ -514,14 +566,25 @@ def main(dataName: str = "TPCH",
     print("constraints", constraint_def)
 
     # Define the configurations
+    # # -----------------------------------------------
+    # constraints = [[0.0014, 10000000000000]]
+    # quantize = [1350] #[150, 450, 750, 1050, 1350]
+    # Top_k = [Top_k] 
+    # size = 50000
+    # bucketSize = [15] 
+    # branchNum = [5] 
+    # queryNum = 7
+    # outputDirectory = str(OUTPUT_DIR)
+    # # -----------------------------------------------
     # -----------------------------------------------
-    constraints = [[0.0014, 10000000000000]]
+    # constraints = [[0.1, 0.3]]
+    constraints = extract_bounds_from_expression(constraint_def["expression"])
     quantize = [1350] #[150, 450, 750, 1050, 1350]
     Top_k = [Top_k] 
     size = 50000
     bucketSize = [15] 
     branchNum = [5] 
-    queryNum = 7
+    queryNum = 1
     outputDirectory = str(OUTPUT_DIR)
     # -----------------------------------------------
 
@@ -651,9 +714,9 @@ def main(dataName: str = "TPCH",
                                 print("df_constraint", df_constraint)
                                 print("df_predicate", df_predicate)     # Merging the dataframes (predicates columns with constraints columns) by their index
                                 print("df_merged", df_merged)
-                                cluster_tree = get_clusters(df_merged.values.tolist(), bucket, branch)
+                                cluster_tree = get_clusters(df_merged.values.tolist(), bucket, branch, dataName, const_num, constraint_columns)
                                 stat_start_time = time.time() 
-                                statistical_tree = get_statistical_info(cluster_tree, df_merged, aggregations, len(all_pred_possible_values), constraint_columns, dataName, dataSize, query_num)
+                                statistical_tree = get_statistical_info(cluster_tree, df_merged, aggregations, len(all_pred_possible_values), constraint_columns, dataName, dataSize, query_num, const_num)
                                 stat_end_time = time.time()
                                 print("Number of Combinations: ", combination)
                                 print("Time of collecting Statistical information:", round(stat_end_time - stat_start_time, 4))
@@ -662,22 +725,40 @@ def main(dataName: str = "TPCH",
                                 print('\n\nPredicates and Constraints correlation:\n-------------------------------------------------------\n', corr_matrix)
 
                                 
-                                print("\n\n---------------------Brute Force--------------------")
+                                # print("\n\n---------------------Brute Force--------------------")
                                 #calling Possible Candidate Lists to go through all possible refinments
                                 #PCL_list.PossibleRef_allCombination(df_merged, sorted_possible_refinments1, dataSize, dataName, k, len(all_pred_possible_values), constraint, query_num, combination) 
 
-                                print("\n\n-------------------------FF------------------------\n")
-                                filter_fully = filtered_fully()
-                                filter_fully.check_predicates(sorted_possible_refinments1, statistical_tree, expression, dataSize, dataName, k, query_num, const_num, constraint, op.getPredicateList(), combination, outputDirectory, bucket, branch)
+                                # print("\n\n-------------------------FF------------------------\n")
+                                # ff_file = os.path.join(
+                                #     outputDirectory,
+                                #     f"satisfied_conditions_Fully_{dataName}_size{dataSize}_query{query_num}_constraint{constraint}_{const_num}.csv"
+                                # )
 
-                                print("\n\n-------------------------RP------------------------\n")
-                                ranges = attributesRanges1()
-                                
-                                #filter_ranges_partial = filtered_with_Ranges_generalize_topK1_norm()
-                                #all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth2(df_original, op.getPredicateList(), sorted_possible_refinments1)  
-                                all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth1(df_original, op.getPredicateList(), sorted_possible_refinments1)                                  
-                                filter_ranges_partial = filtered_with_Ranges_generalize_topK1()
-                                filter_ranges_partial.check_predicates(statistical_tree, all_pred_possible_Ranges, sorted_possible_refinments1, expression, dataSize, dataName, k, op.getPredicateList(), query_num, const_num, constraint, combination, outputDirectory, bucket, branch)
+                                # if os.path.exists(ff_file):
+                                #     print(f"Loading existing FF results from {ff_file}...")
+                                # else:
+                                #     print("FF results not found. Running filtered_fully...")
+                                #     filter_fully = filtered_fully()
+                                #     filter_fully.check_predicates(sorted_possible_refinments1, statistical_tree, expression, dataSize, dataName, k, query_num, const_num, constraint, op.getPredicateList(), combination, outputDirectory, bucket, branch)
+
+                                print("\n\n-------------------------RP------------------------\n")                                
+                                rp_file = os.path.join(
+                                    outputDirectory,
+                                    f"satisfied_conditions_Ranges_{dataName}_size{dataSize}_query{query_num}_constraint{constraint}_{const_num}.csv"
+                                )
+
+                                if os.path.exists(rp_file):
+                                    print(f"Loading existing RP results from {rp_file}...")
+                                else:
+                                    print("RP results not found. Running filtered_with_Ranges_generalize_topK1...")
+                                    ranges = attributesRanges1()
+                                    
+                                    #filter_ranges_partial = filtered_with_Ranges_generalize_topK1_norm()
+                                    #all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth2(df_original, op.getPredicateList(), sorted_possible_refinments1)  
+                                    all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth1(df_original, op.getPredicateList(), sorted_possible_refinments1)                                  
+                                    filter_ranges_partial = filtered_with_Ranges_generalize_topK1()
+                                    filter_ranges_partial.check_predicates(statistical_tree, all_pred_possible_Ranges, sorted_possible_refinments1, expression, dataSize, dataName, k, op.getPredicateList(), query_num, const_num, constraint, combination, outputDirectory, bucket, branch)
                                 
                                 print("\n\n-----------------------------------------\n")
 
