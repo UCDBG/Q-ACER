@@ -13,6 +13,8 @@ from .constraint_evaluation_other import constraint_evaluation_other
 from itertools import product, tee
 import heapq
 import os
+import ast
+import math
 
 import json, hashlib  # add with your other imports
 
@@ -428,6 +430,22 @@ class filtered_with_Ranges_generalize_topK1:
         print("Partial Time:", round(Division_time, 3), "seconds")
         print("Time taken Overall:", round(elapsed_time, 3), "seconds")
 
+    def str_to_list(self,s):
+        clean_items = s.strip("[]").split(",")
+        result = [
+            math.nan if item.strip() == "nan" else ast.literal_eval(item.strip())
+            for item in clean_items
+        ]
+        return result
+
+    def fix_cluster(self,c):
+        # turn str into list data
+        if type(c['Data_Min']) == str:
+            c['Data_Min'] = self.str_to_list(c['Data_Min'])
+        if type(c['Data_Max']) == str:
+            c['Data_Max'] = self.str_to_list(c['Data_Max'])
+
+    
     def filter_clusters_partial_modified(self, cluster_key, parent_child_map, cluster_map, filtered_clusters, conditions, operators, counter, child_counter):
         stack = [cluster_key]
 
@@ -436,15 +454,22 @@ class filtered_with_Ranges_generalize_topK1:
             cluster_key = stack.pop()
             cluster_info = cluster_map[cluster_key]
 
+            #print(f"PROCESS CLUST: {cluster_info}")
+
+            # turn str into list data
+            self.fix_cluster(cluster_info)
+            
             # Extract relevant data
             data_Min = cluster_info['Data_Min']
             data_Max = cluster_info['Data_Max']
 
+            
             # Check if this cluster fully satisfies all conditions
             fully_satisfies = True
             partially_satisfies = True
 
             for i, (condition, operator) in enumerate(zip(conditions, operators)):
+                #print(f"min: <{data_Min[i]}>, max: <{data_Max[i]}>")
                 if not self.applyOperator.apply_operator_ranges(data_Min[i], data_Max[i], condition['range'][0], condition['range'][1], operator, "Full"):
                     fully_satisfies = False
                 if not self.applyOperator.apply_operator_ranges(data_Min[i], data_Max[i], condition['range'][0], condition['range'][1], operator, "Partial"):
@@ -462,6 +487,7 @@ class filtered_with_Ranges_generalize_topK1:
 
                         child_counter+=1
                         child_info = cluster_map[child_key]
+                        self.fix_cluster(child_info)
                         child_Min = child_info['Data_Min']
                         child_Max = child_info['Data_Max']
 

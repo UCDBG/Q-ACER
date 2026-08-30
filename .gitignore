@@ -33,3 +33,5 @@ query-repair-backend/*.csv
 query-repair-backend/*.json
 query-repair-backend/query-repair-jobs/
 /.direnv/
+/query-repair-backend/backend-log.txt
+/query-repair-frontend/fontend-log.txt

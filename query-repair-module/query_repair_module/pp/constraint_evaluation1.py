@@ -4,7 +4,10 @@ import re
 import numpy as np
 from .ExpressionNode import ExpressionNode
 
-
+# afunc: "count" | "sum" | "min" | "max" | "avg"
+# cond: comparison (AND comparison)*
+# AND: "AND"
+# agg: afunc "(" cond ")"
 
 class constraint_evaluation1:
     def __init__(self):
@@ -17,6 +20,8 @@ class constraint_evaluation1:
     # Method to extract boundary values from the expression
     def extract_boundary_values(self, expression):
 
+        #print(f"expression was {expression}")
+        
         # Regex pattern to match floating-point numbers or integers in the expression
         pattern = r'[-+]?\d*\.\d+|\d+'
         matches = re.findall(pattern, expression)

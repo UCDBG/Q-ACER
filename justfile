@@ -88,3 +88,7 @@ serve-log:
     # Wait for all background jobs to finish
     wait
 
+# cleans KD-tree and other cached files
+clean:
+    rm -rf query-repair-module/query_repair_module/output query-repair-module/query_repair_module/statistic* query-repair-module/query_repair_module/KD_tree*
+    rm -rf query-repair-backend/output query-repair-backend/output2 query-repair-backend/query-repair-jobs query-repair-backend/statistical* query-repair-backend/KD_tree*

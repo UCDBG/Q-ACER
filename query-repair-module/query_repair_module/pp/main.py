@@ -35,14 +35,14 @@ def analyze_distribution(df, column):
     
     plt.show()
  
-def get_clusters(df_merged, buckestSize, branchNum, dataName, const_num, constraint_columns):
+def get_clusters(df_merged, buckestSize, branchNum, dataName, const_num, constraint_columns, caching):
     start_time = time.time() 
     cols_str = str(constraint_columns)
     print(f"Constraint Columns: {cols_str}")
 
     tree_file_path = f"KD_tree_{dataName}_{const_num}_{cols_str}.json"
 
-    if os.path.exists(tree_file_path):
+    if os.path.exists(tree_file_path) and caching:
         print(f"Loading existing KD-tree from {tree_file_path}...")
         KD_tree = kd_tree1.load_from_json(tree_file_path)
         KD_tree_dict = kd_tree1.flatten_from_root(KD_tree)
@@ -89,9 +89,9 @@ def get_convex_hull(cluster_tree):
     #convex_hull.draw_convex_hulls(cluster_tree)
     return hull_info_list
 
-def get_statistical_info(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num):
+def get_statistical_info(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num, caching):
     stat_info = statistical_calculation()
-    stat_tree = stat_info.statistical_calculation(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num)
+    stat_tree = stat_info.statistical_calculation(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num, caching)
     print(f"Query number: {query_num}")
 
     return stat_tree
@@ -542,7 +542,8 @@ def extract_bounds_from_expression(expression):
 def main(dataName: str = "TPCH",
     Top_k: int = 7,
     predicates: list[dict] | None = None ,
-    constraint_def: dict | None = None):
+    constraint_def: dict | None = None,
+    caching=True):
     OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "./output")).resolve()
     if predicates is None:
         predicates = [
@@ -714,9 +715,9 @@ def main(dataName: str = "TPCH",
                                 print("df_constraint", df_constraint)
                                 print("df_predicate", df_predicate)     # Merging the dataframes (predicates columns with constraints columns) by their index
                                 print("df_merged", df_merged)
-                                cluster_tree = get_clusters(df_merged.values.tolist(), bucket, branch, dataName, const_num, constraint_columns)
+                                cluster_tree = get_clusters(df_merged.values.tolist(), bucket, branch, dataName, const_num, constraint_columns, caching)
                                 stat_start_time = time.time() 
-                                statistical_tree = get_statistical_info(cluster_tree, df_merged, aggregations, len(all_pred_possible_values), constraint_columns, dataName, dataSize, query_num, const_num)
+                                statistical_tree = get_statistical_info(cluster_tree, df_merged, aggregations, len(all_pred_possible_values), constraint_columns, dataName, dataSize, query_num, const_num, caching)
                                 stat_end_time = time.time()
                                 print("Number of Combinations: ", combination)
                                 print("Time of collecting Statistical information:", round(stat_end_time - stat_start_time, 4))
@@ -791,7 +792,27 @@ def main(dataName: str = "TPCH",
     ''' 
       
 if __name__ == '__main__':
-
-    main()
+    predicates = [
+        {"field": "income", "op": ">", "value": 100},
+        {"field": "num-children", "op": ">=", "value": 2},
+        # {"field": "complications", "op": ">", "value": 3},
+    ]
+    constraints = {
+        "columns": [ "smoker", "" ], # [ "smoker", "" ]
+        "aggregations": {
+            "agg1": 'count()',
+            "agg2": 'count("smoker == 2")'
+        },
+        "expression": '0.1 <= (agg2/agg1) <= 0.2',
+        "const_num": 2
+    }
+    
+    main(
+        dataName = "Healthcare",
+        Top_k = 7,
+        predicates = predicates,
+        constraint_def = constraints,
+        caching=True
+    )
 
 

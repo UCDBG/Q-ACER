@@ -3,7 +3,8 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import re
 import os
-# import ast
+import ast
+import math
 
 class statistical_calculation:
     def __init__(self):
@@ -174,17 +175,55 @@ class statistical_calculation:
 
         return result
 
-    def statistical_calculation(self, cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num):
+    def str_to_number_list(self,s):
+        """
+        Turn string s into a list of numbers using AST.
+        """
+        if type(s) != str:
+            return s
+        clean_items = s.strip("[]").split(",")
+        result = [
+            math.nan if item.strip() == "nan" else ast.literal_eval(item.strip())
+            for item in clean_items
+        ]
+        return result
+
+    def cleanup_arrays(self,s):
+        comma = re.sub(r"[ ]+", ",", s)
+        clean = re.sub(r"[\\[][,]", "[", comma)
+        clean = re.sub(r"[,]+", ",", clean)
+        clean = clean.replace("nan", "None")
+        clean = clean.replace("\n", "")        
+        print(f"cleaned {clean}")
+        ob = ast.literal_eval(clean)
+        print(f"as python {ob}")
+        return ob
+    
+    def fix_datatypes(self,df):
+        # turn str into list data
+        df['Data_Min'] = df['Data_Min'].apply(self.str_to_number_list)
+        df['Data_Max'] = df['Data_Max'].apply(self.str_to_number_list)
+        # Predicates points uses numpy format (space-separated)
+        df['Predicates points'] = df['Predicates points'].apply(
+            lambda x: np.array(self.cleanup_arrays(x)) if isinstance(x, str) else x
+        )
+        
+    def statistical_calculation(self, cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num, caching):
         statistical_tree = []
 
         # Define the dynamic file name
-        file_name = f"statistical_info_Q{query_num}_{dataName}_{dataSize}_{const_num}_{constraint_columns}.csv"
-
-        # Check if the file exists'''
-        if os.path.exists(file_name):
-            print(f"File '{file_name}' already exists. Reading from the file...")
-            df_statistical_info = pd.read_csv(file_name)
+        #file_name = f"statistical_info_Q{query_num}_{dataName}_{dataSize}_{const_num}_{constraint_columns}.csv"
+        file_name = f"statistical_info_Q{query_num}_{dataName}_{dataSize}_{const_num}_{constraint_columns}.pkl"
+        
+        # Check if the file exists
+        if os.path.exists(file_name) and caching:
+            print(f"CACHE: File '{file_name}' already exists. Reading from the file...")
+            # df_statistical_info = pd.read_csv(file_name)
+            # df_statistical_info = pd.read_parquet(file_name)
+            df_statistical_info = pd.read_pickle(file_name)
+            print(f"Read DF: {df_statistical_info}")
             
+            self.fix_datatypes(df_statistical_info)
             # # Predicates points uses numpy format (space-separated)
             # df_statistical_info['Predicates points'] = df_statistical_info['Predicates points'].apply(
             #     lambda x: np.array(ast.literal_eval(x.replace('  ', ' ').replace(' ', ',')))
@@ -234,8 +273,11 @@ class statistical_calculation:
         df_statistical_info = pd.DataFrame(statistical_tree)
 
         # Write the DataFrame to a CSV file with the dynamic file name
-        df_statistical_info.to_csv(file_name, index=False)
-
+        # use parquet
+        #df_statistical_info.to_csv(file_name, index=False)
+        #df_statistical_info.to_parquet(file_name, index=False)
+        df_statistical_info.to_pickle(file_name)
+        
         return statistical_tree
 
     def points_bounds(self, cluster_points):
