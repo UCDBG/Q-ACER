@@ -1,0 +1,818 @@
+import os
+from pathlib import Path
+import time
+from typing import List, Union
+from .SQL_operators import SQL_operators
+from .kd_tree1 import kd_tree1
+from .brute_force import brute_force
+from .Dataframe import Dataframe
+from .attributesRanges1 import attributesRanges1
+from .attributesRanges import attributesRanges
+from .ExpressionEvaluator1 import ExpressionEvaluator1
+import pandas as pd
+import numpy as np
+from .generate_convex_hull import generate_convex_hull
+from .statistical_calculation import statistical_calculation
+from .filtered_fully import filtered_fully
+from .filtered_with_Ranges_generalize_topK1 import filtered_with_Ranges_generalize_topK1
+from .filtered_with_Ranges_generalize_topK1_norm import filtered_with_Ranges_generalize_topK1_norm
+from .predicatesPossibleValues import predicatesPossibleValues
+from .ExpressionEvaluator import ExpressionEvaluator
+import matplotlib.pyplot as plt
+import re
+import math
+
+
+def analyze_distribution(df, column):
+    plt.figure(figsize=(10, 6))
+
+    # Plot histogram
+    plt.hist(df[column], bins=30, edgecolor='black')
+    plt.title(f"Distribution of {column}")
+    plt.xlabel(column)
+    plt.ylabel("Frequency")
+    plt.grid(True, linestyle='--', alpha=0.7)
+    
+    plt.show()
+ 
+def get_clusters(df_merged, buckestSize, branchNum, dataName, const_num, constraint_columns, caching):
+    start_time = time.time() 
+    cols_str = str(constraint_columns)
+    print(f"Constraint Columns: {cols_str}")
+
+    tree_file_path = f"KD_tree_{dataName}_{const_num}_{cols_str}.json"
+
+    if os.path.exists(tree_file_path) and caching:
+        print(f"Loading existing KD-tree from {tree_file_path}...")
+        KD_tree = kd_tree1.load_from_json(tree_file_path)
+        KD_tree_dict = kd_tree1.flatten_from_root(KD_tree)
+    else:
+        print("Existing KD-tree not found. Generating new tree...")
+        KD_tree = kd_tree1(df_merged, 3, buckestSize, branchNum)
+        KD_tree_dict = KD_tree.flatten_tree()
+        KD_tree.save_to_json(tree_file_path)
+        # KD_tree.save_to_csv(tree_file_path)
+        # Save the tree to a CSV file
+        #generator1 = generate_clusters1()
+        #cluster_tree1 = generator1.generating_clusters(df_merged.values)#, n_clusters=None, distance_threshold=20)  # Adjust as needed    
+        #cleaned_clusters = generator1.remove_duplicates(cluster_tree1)
+        #final_cluster_tree = generator1.add_metadata(cleaned_clusters, df_merged.values, cluster_tree1)
+
+    end_time = time.time() 
+    print("Generating clusters time: ", round(end_time - start_time, 3))
+
+    return KD_tree_dict
+
+def get_convex_hull(cluster_tree):
+    convex_hull = generate_convex_hull()
+    # Calculate and print convex hull points for each cluster in the tree
+    hulls = convex_hull.calculate_convex_hulls_for_tree(cluster_tree)
+    
+    #for hull in hulls:
+        #print(f"Convex Hull Points: {hull['Convex Hull Points']}, Level {hull['Level']}, Cluster {hull['Cluster Id']}")
+    # Prepare hull info for CSV
+    hull_info_list = []
+    for hull in hulls:
+        hull_info_list.append({
+            'Level': hull['Level'],
+            'Cluster Id': hull['Cluster Id'],
+            'Data points': hull['Data points']
+            #'Constraint points': hull['Constraint points']
+        })
+
+    # Create a DataFrame
+    df_hulls = pd.DataFrame(hull_info_list)
+
+    # Save to CSV
+    df_hulls.to_csv('hull_info.csv', index=False)
+
+    #convex_hull.draw_convex_hulls(cluster_tree)
+    return hull_info_list
+
+def get_statistical_info(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num, caching):
+    stat_info = statistical_calculation()
+    stat_tree = stat_info.statistical_calculation(cluster_tree, df, aggregations, predicates_number, constraint_columns, dataName, dataSize, query_num, const_num, caching)
+    print(f"Query number: {query_num}")
+
+    return stat_tree
+
+def userQuery_Healthcare_Q1(qua, size):
+    query_num = 101
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_Healthcare(size)
+    print("\n\nData Size: ", dataSize)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    df1 = op.filter("UQ", df_original, "income", ">=", 250) 
+    df2 = op.filter("UQ", df1, "num-children", ">=", 3)
+    df3 = op.filter("UQ", df2, "county", "<=", 3)
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num  
+
+def userQuery_Healthcare_Q2(qua, size):
+    query_num = 2
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_Healthcare(size)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    df1 = op.filter("UQ", df_original, "income", "<=", 100000)
+    df2 = op.filter("UQ", df1, "complications", ">=", 5)
+    df3 = op.filter("UQ", df2, "num-children", ">=", 4)
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num
+
+def userQuery_Healthcare_Q3(qua, size):
+    query_num = 3
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_Healthcare(size)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    df1 = op.filter("UQ", df_original, "income", ">=", 300000)
+    df2 = op.filter("UQ", df1, "complications", ">=", 5)
+    df3 = op.filter("UQ", df2, "county", "==", 1) 
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num    
+
+def constraint1_Healthcare(df, constraint): 
+    result_list = []
+    const_num = 1
+    evaluator = ExpressionEvaluator()
+    aggregations = {
+        "agg1": 'count("race == 1 and label == 1")',
+        "agg2":'count("race == 1")',
+        "agg3": 'count("race == 2 and label == 1")',
+        "agg4": 'count("race == 2")'
+    }
+    expression = [f"{constraint[0]} <= (agg1 / agg2) - (agg3 / agg4) <= {constraint[1]}"]
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+    
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+    
+    return columns_used, aggregations, expression, const_num
+
+def constraint2_Healthcare(df, constraint): 
+    result_list = []
+    const_num = 2
+    evaluator = ExpressionEvaluator()
+    aggregations = {
+        "agg1": 'count("ageGroup == 1 and label == 1")',
+        "agg2":'count("ageGroup == 1")',
+        "agg3": 'count("ageGroup == 2 and label == 1")',
+        "agg4": 'count("ageGroup == 2")'
+    }
+    expression = f"{constraint[0]} <= (agg1 / agg2) - (agg3 / agg4) <= {constraint[1]}"
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+    
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+    
+    return columns_used, aggregations, expression, const_num
+
+def userQuery_ACSIncome_Q4(qua, size):
+    query_num = 1
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_ACSIncome(size)
+    print("\n\nData Size: ", dataSize)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    #df_original = adjust_unique_values(df_original, 'WKHP', qua) 
+
+    df1 = op.filter("UQ", df_original, "WKHP", ">=", 30) 
+    df2 = op.filter("UQ", df1, "SCHL", ">=", 12) 
+    df3 = op.filter("UQ", df2, "COW", ">=", 3.0) 
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num
+
+def adjust_unique_values(df, column, new_unique_count):
+    """
+    Adjusts the number of unique values in a column while keeping the DataFrame length the same.
+    
+    :param df: DataFrame
+    :param column: Column name to modify
+    :param new_unique_count: Desired number of unique values
+    :return: Modified DataFrame
+    """
+    unique_values = np.linspace(1, new_unique_count, new_unique_count, dtype=int)  # Generate spread-out unique values
+    df[column] = np.random.choice(unique_values, size=len(df), replace=True)  # Assign values while keeping length same
+    return df
+
+def userQuery_ACSIncome_Q5(qua, size):
+    query_num = 2
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_ACSIncome(size)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    df1 = op.filter("UQ", df_original, "WKHP", "<=", 40)
+    df2 = op.filter("UQ", df1, "SCHL", "<=", 19)
+    df3 = op.filter("UQ", df2, "COW", "<=", 4)
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num
+    
+def userQuery_ACSIncome_Q6(qua, size):
+    query_num = 3
+    #getting dataframe
+    input = Dataframe()
+    df_original, dataName, dataSize = input.getDataframe_ACSIncome(size)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+    df1 = op.filter("UQ", df_original, "AGEP", ">=", 35)
+    df2 = op.filter("UQ", df_original, "COW", ">=", 2)
+    df3 = op.filter("UQ", df1, "SCHL", "<=", 15)
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes()) 
+
+    return df_original, df3, all_pred_possible_values, op, dataName, dataSize, query_num  
+
+def constraint3_ACSIncome(df, constraint): 
+    result_list = []
+    const_num = 3
+    evaluator = ExpressionEvaluator()
+    aggregations = {
+        "agg1": 'count("SEX == 1 and PINCP >= 20000")',
+        "agg2":'count("SEX == 1")',
+        "agg3": 'count("SEX == 2 and PINCP >= 20000")',
+        "agg4": 'count("SEX == 2")'
+    }
+    expression = f"{constraint[0]} <= (agg1 / agg2) - (agg3 / agg4) <= {constraint[1]}"
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+    
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+    
+    return columns_used, aggregations, expression, const_num
+
+def constraint4_ACSIncome(df, constraint):
+    result_list = []
+    const_num = 4
+    evaluator = ExpressionEvaluator()
+    aggregations = {
+        "agg1": 'count("RAC1P == 1 and PINCP >= 10000")',
+        "agg2":'count("RAC1P == 1")',
+        "agg3": 'count("RAC1P == 2 and PINCP >= 10000")',
+        "agg4": 'count("RAC1P == 2")'
+    }
+    expression = f"{constraint[0]} <= (agg1 / agg2) - (agg3 / agg4) <= {constraint[1]}"
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+
+    return columns_used, aggregations, expression, const_num
+
+def constraint2_Cardinality_ACSIncome(df, constraint):
+    result_list = []
+    evaluator = ExpressionEvaluator1()
+    aggregations = {
+        "agg1": 'count("SEX == 2 and MAR == 1")',
+        "agg2": 'count("RAC1P == 2")'
+        #"agg3": 'count("ageGroup == 3")'
+    }
+    expression = [f"{constraint[2]} <= agg1 <= {constraint[0]}", f"{constraint[2]} <= agg2 <= {constraint[1]}"]#, f"{constraint[3]} <= agg3 <= {constraint[2]}"]
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+
+    return columns_used, aggregations, expression
+
+def constraint_Cardinality(df, constraint): 
+    result_list = []
+    evaluator = ExpressionEvaluator()
+    aggregations = {
+        "agg1": 'count("SEX == 1")'
+    }
+    expression = '10 <= agg1 <= 35'
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+    
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+    
+    return columns_used, aggregations, expression
+
+def userQuery_TPCH_Q7(qua, size):
+    query_num = 1
+    #getting dataframe
+    input = Dataframe()
+
+    df_lineitem, df_nation, df_part, df_partsupp, df_region, df_supplier, dataName, dataSize = input.getDataframe_TPCH(size)
+    op = SQL_operators()
+    predAttRanges = attributesRanges()
+
+    # Perform the join operations
+    # Merge all tables, including lineitem
+    merged_df = pd.merge(
+        pd.merge(
+            pd.merge(
+                pd.merge(
+                    pd.merge(df_part, df_partsupp, left_on='p_partkey', right_on='ps_partkey'),
+                    df_supplier, left_on='ps_suppkey', right_on='s_suppkey'
+                ),
+                df_nation, left_on='s_nationkey', right_on='n_nationkey'
+            ),
+            df_region, left_on='n_regionkey', right_on='r_regionkey'
+        ),
+        df_lineitem, left_on=['p_partkey', 'ps_suppkey'], right_on=['l_partkey', 'l_suppkey']
+    )
+    merged_df = merged_df.sample(n= size, replace=True, random_state=42)  # You can change the value of n as needed
+    # Save the merged DataFrame to a CSV file
+    #output_file = 'merged_data.csv'
+    #merged_df.to_csv(output_file, index=False)
+
+    merged_df1 = op.filter("UQ", merged_df, "p_size", ">=", 10)
+    merged_df2 = op.filter("UQ", merged_df1, "p_type", "==", 20)
+    merged_df3 = op.filter("UQ", merged_df2, "r_name", "==", 4)
+
+    all_pred_possible_values = predAttRanges.generatePossibleValues(merged_df, op.get_predicates_attributes())
+
+    return merged_df, merged_df3, all_pred_possible_values, op, dataName, dataSize, query_num
+
+def constraint5_TPCH(df, constraint):
+    const_num = 5
+    result_list = []
+    evaluator = ExpressionEvaluator1()
+    aggregations = {
+        "agg1": 'sum("Revenue")',
+        "agg2": 'min("Revenue all")'
+    }
+    expression = [f"{constraint[0]} <= (agg1 / agg2) <= {constraint[1]}"]
+
+    # Evaluate individual aggregations
+    for index, (agg_name, agg_func) in enumerate(aggregations.items(), start=1):
+        result = evaluator.evaluate_aggregation(df, agg_func)
+        result_list.append(f"agg{index}: {result}")
+
+    # Retrieve list of all columns used in the queries
+    columns_used = evaluator.get_columns_used()
+
+    return columns_used, aggregations, expression, const_num
+
+
+_NUM_LITERAL = re.compile(
+    r'(?<![A-Za-z_])'                 # not immediately preceded by a letter/underscore
+    r'(\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)'  # number: int/float with optional exponent
+    r'(?![A-Za-z_])'                  # not immediately followed by a letter/underscore
+)
+
+def _sanitize_expressions(expr_in: Union[str, List[str]]) -> Union[str, List[str]]:
+    """
+    Sanitize constraint expressions.
+    - If input is a list[str], return a list[str] with each element sanitized.
+    - If input is a str, return a sanitized str.
+
+    Converts only standalone numeric literals (e.g., 0.1, 2e-3, 1000) to float strings,
+    and does NOT touch identifiers like 'agg1', 'x2', etc.
+    """
+    def sanitize(expr: str) -> str:
+        # remove stray quotes (if any were sent around numbers)
+        expr = expr.replace("'", "").replace('"', "")
+        # convert numeric literals to canonical float strings
+        expr = _NUM_LITERAL.sub(lambda m: str(float(m.group(1))), expr)
+        return expr
+
+    if isinstance(expr_in, list):
+        return [sanitize(e) for e in expr_in]
+    elif isinstance(expr_in, str):
+        return sanitize(expr_in)
+    else:
+        raise TypeError(f"Unsupported type for expression: {type(expr_in)}")
+
+def _normalize_aggregations(aggregations: dict) -> dict:
+    """
+    Normalize aggregation strings before evaluation.
+    In particular, map count() -> count("__all__")
+    so evaluators never see an empty argument.
+    """
+    normalized = {}
+
+    for name, expr in aggregations.items():
+        e = expr.strip()
+
+        # count()  -> count("__all__")
+        if re.fullmatch(r'count\(\s*\)', e, flags=re.IGNORECASE):
+            normalized[name] = 'count()'
+        else:
+            normalized[name] = e
+
+    return normalized
+
+def resolve_constraint(dataName: str, constraint: list | tuple, constraint_def: dict | None):
+    """
+    Returns (constraint_columns, aggregations, expression, const_num).
+    If constraint_def is provided (from frontend), use that directly.
+    Otherwise, fall back to dataset-specific default (TPCH only here).
+    """
+    if constraint_def is not None:
+        columns = constraint_def["columns"]
+        # aggregations = constraint_def["aggregations"]
+        aggregations = _normalize_aggregations(constraint_def["aggregations"])
+        expression = _sanitize_expressions(constraint_def["expression"])  # may be str or list
+        print("expression::", expression)
+        const_num = int(constraint_def.get("const_num", 0))
+        return columns, aggregations, expression, const_num
+
+    if dataName == "TPCH":
+        low, high = map(float, constraint)
+        columns = ["Revenue", "Revenue all"]
+        aggregations = {
+            "agg1": 'sum("Revenue")',
+            "agg2": 'min("Revenue all")',
+        }
+        # For default case, keep same type convention → use list
+        expression = [f"{low} <= (agg1 / agg2) <= {high}"]
+        const_num = 5
+        return columns, aggregations, expression, const_num
+
+    raise ValueError("constraint_def is required for this dataset.")
+
+
+
+def check_original_query_pass(df_filtered, aggregations, expression):
+    """
+    Returns: (passed: bool, metric: float | list[float] | None, agg_values: dict)
+    """
+    from .ExpressionEvaluator import ExpressionEvaluator
+    from .ExpressionEvaluator1 import ExpressionEvaluator1
+
+    aggregations = _normalize_aggregations(aggregations)
+
+    # pick evaluator by agg functions used
+    agg_funcs = " ".join(aggregations.values()).lower()
+    if any(k in agg_funcs for k in ["sum(", "min(", "max(", "avg("]):
+        evaluator = ExpressionEvaluator1()
+    else:
+        evaluator = ExpressionEvaluator()
+
+    # 1) evaluate aggs
+    agg_values = {name: evaluator.evaluate_aggregation(df_filtered, func)
+                  for name, func in aggregations.items()}
+
+    def safe_div(a, b):
+        if b in (0, 0.0, None) or (isinstance(b, float) and math.isnan(b)):
+            return float("nan")
+        return a / b
+
+    def eval_range_expr(range_expr: str):
+        # expects: L <= (agg expr) <= U
+        m = re.search(r'^\s*([-\d\.eE]+)\s*<=\s*(.+?)\s*<=\s*([-\d\.eE]+)\s*$', range_expr)
+        if not m:
+            raise ValueError(f"Unsupported constraint format: {range_expr}")
+        L = float(m.group(1)); core = m.group(2).strip(); U = float(m.group(3))
+
+        if all(k in agg_values for k in ("agg1","agg2","agg3","agg4")) and \
+           ("agg1" in core and "agg2" in core and "agg3" in core and "agg4" in core):
+            val = safe_div(agg_values["agg1"], agg_values["agg2"]) - safe_div(agg_values["agg3"], agg_values["agg4"])
+        else:
+            # tiny safe eval: replace agg tokens with numbers, disable builtins
+            safe_core = core
+            for k, v in agg_values.items():
+                safe_core = re.sub(fr'\b{k}\b', str(float(v)), safe_core)
+            val = eval(safe_core, {"__builtins__": {}}, {})
+
+        passed = (not (isinstance(val, float) and math.isnan(val))) and (L <= val <= U)
+        return passed, val
+
+    if isinstance(expression, str):
+        ok, metric = eval_range_expr(expression)
+        return ok, metric, agg_values
+    elif isinstance(expression, list):
+        metrics = []
+        ok_all = True
+        for expr in expression:
+            ok, mval = eval_range_expr(expr)
+            metrics.append(mval)
+            ok_all = ok_all and ok
+        return ok_all, metrics, agg_values
+    else:
+        raise TypeError("expression must be str or list[str]")
+
+
+# With this — extract bounds from the frontend expression:
+def extract_bounds_from_expression(expression):
+    # Handle both str and list
+    expr = expression[0] if isinstance(expression, list) else expression
+    # Match: L <= ... <= U
+    m = re.search(r'^\s*([-\d\.eE]+)\s*<=.+<=\s*([-\d\.eE]+)\s*$', expr)
+    if m:
+        return [[float(m.group(1)), float(m.group(2))]]
+    # Match single-sided: ... <= U or ... >= L
+    m = re.search(r'([-\d\.eE]+)\s*$', expr)
+    if m:
+        return [[0.0, float(m.group(1))]]
+    return [[0.0, 1.0]]  # safe fallback
+
+
+def main(dataName: str = "TPCH",
+    Top_k: int = 7,
+    predicates: list[dict] | None = None ,
+    constraint_def: dict | None = None,
+    caching=True):
+    OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "./output")).resolve()
+    if predicates is None:
+        predicates = [
+            {"field": "p_size", "op": ">=", "value": 10},
+            {"field": "p_type", "op": "==", "value": 20},
+            {"field": "r_name", "op": "==", "value": 4},
+            ]
+    if constraint_def is None:
+        constraint_def = {
+            "columns": ["Revenue", "Revenue all"],
+            "aggregations": {
+                "agg1": 'sum("Revenue")',
+                "agg2": 'min("Revenue all")'
+            },
+            # You can bake the numbers in here (single constraint case)…
+            "expression": ['0.0014 <= (agg1 / agg2) <= 10000000000000'],
+            "const_num": 5
+        }
+
+    print("predicates", predicates)
+    print("constraints", constraint_def)
+
+    # Define the configurations
+    # # -----------------------------------------------
+    # constraints = [[0.0014, 10000000000000]]
+    # quantize = [1350] #[150, 450, 750, 1050, 1350]
+    # Top_k = [Top_k] 
+    # size = 50000
+    # bucketSize = [15] 
+    # branchNum = [5] 
+    # queryNum = 7
+    # outputDirectory = str(OUTPUT_DIR)
+    # # -----------------------------------------------
+    # -----------------------------------------------
+    # constraints = [[0.1, 0.3]]
+    constraints = extract_bounds_from_expression(constraint_def["expression"])
+    quantize = [1350] #[150, 450, 750, 1050, 1350]
+    Top_k = [Top_k] 
+    size = 50000
+    bucketSize = [15] 
+    branchNum = [5] 
+    queryNum = 1
+    outputDirectory = str(OUTPUT_DIR)
+    # -----------------------------------------------
+
+    for bucket in bucketSize:
+        for branch in branchNum:
+            for k in Top_k:
+                for qua in quantize:
+                    df_original, column_names, all_pred_possible_values, sorted_possible_refinments1, predicate_att_list, op = [], [], [], [], [], []
+                    # ADD this instead:
+                    op = SQL_operators()
+                    predAttRanges = attributesRanges()
+                    input_loader = Dataframe()
+
+                    # 1) Load per dataset (no filters here)
+                    if dataName == "TPCH":
+                        df_lineitem, df_nation, df_part, df_partsupp, df_region, df_supplier, dataName, dataSize = \
+                            input_loader.getDataframe_TPCH(size)
+
+                        # 2) Build the same join as userQuery_TPCH_Q7 (but DO NOT apply hardcoded filters)
+                        merged_df = pd.merge(
+                            pd.merge(
+                                pd.merge(
+                                    pd.merge(
+                                        pd.merge(df_part, df_partsupp, left_on='p_partkey', right_on='ps_partkey'),
+                                        df_supplier, left_on='ps_suppkey', right_on='s_suppkey'
+                                    ),
+                                    df_nation, left_on='s_nationkey', right_on='n_nationkey'
+                                ),
+                                df_region, left_on='n_regionkey', right_on='r_regionkey'
+                            ),
+                            df_lineitem, left_on=['p_partkey', 'ps_suppkey'], right_on=['l_partkey', 'l_suppkey']
+                        )
+                        # Optional: sample same as before (keeps downstream behavior identical)
+                        merged_df = merged_df.sample(n=size, replace=True, random_state=42)
+
+                        df_original = merged_df
+
+                    elif dataName == "Healthcare":
+                        df_original, _, dataSize = input_loader.getDataframe_Healthcare(size)
+
+                    elif dataName == "ACSIncome":
+                        df_original, _, dataSize = input_loader.getDataframe_ACSIncome(size)
+
+                    else:
+                        raise ValueError(f"Unsupported dataset: {dataName}")
+
+                    # 3) Apply FRONTEND predicates using your existing operator
+                    df_userQueryOut = df_original
+                    print("df original", df_original)
+                    REL_OPS = {"<", "<=", ">", ">="}
+                    for pred in (predicates or []):
+                         col = pred["field"]
+                         op_sym = pred["op"]
+                         val = pred["value"]
+
+                        # If operator is relational, coerce both column + value to numeric
+                         if op_sym in REL_OPS:
+                            # Ensure dataframe column is numeric
+                            df_userQueryOut[col] = pd.to_numeric(df_userQueryOut[col], errors="coerce")
+                            # Ensure value is numeric too
+                            try:
+                                val = float(val)
+                            except Exception:
+                                pass
+                        # Expect shape: {"field": "...", "op": "...", "value": ...}
+                         df_userQueryOut = op.filter("UQ", df_userQueryOut, pred["field"], pred["op"], pred["value"])
+
+                    # 4) Compute possible values (match your prior behavior per dataset)
+                    if dataName == "TPCH":
+                        # you previously used 'merged_df' for TPCH
+                        all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes())
+                    else:
+                        # you previously used original df for ACS/Healthcare
+                        all_pred_possible_values = predAttRanges.generatePossibleValues(df_original, op.get_predicates_attributes())
+
+                    # 5) Provide a dummy query_num (kept for compatibility in logs)
+                    query_num = 1
+
+                    # (Optional) debug print—mirrors your old log
+                    print("input---", (df_original, df_userQueryOut, all_pred_possible_values, op, dataName, dataSize, queryNum))
+
+                    predicate_att_list = op.getPredicateList()
+                    column_names = [item[0] for item in predicate_att_list]     # Extract the column names from the predicate_att_list     
+                    PCL_list = brute_force() 
+                    possibleValues = predicatesPossibleValues()
+                    sorted_possible_refinments1 = possibleValues.generate_possible_refinments_similarity(all_pred_possible_values, op.getPredicateList())
+                    combination = len(sorted_possible_refinments1)
+                    for constraint in constraints:
+                            count = 1
+                            while count <= 1:
+                                constraint_columns, df_merged, df_constraint, corr_matrix, df_predicate, statistical_tree, cluster_tree, columns = [], [], [], [], [], [], [], []
+                                df_predicate = pd.DataFrame(df_original, columns=column_names)      # Convert to a Pandas DataFrame with dynamic column names
+                                # constraint_columns, aggregations, expression, const_num = globals()[f"constraint{constraintNum}_{dataName}"](df_original, constraint)
+                                constraint_columns, aggregations, expression, const_num = resolve_constraint(dataName, constraint, constraint_def) 
+                                # --- ORIGINAL QUERY PASS/FAIL CHECK ---
+                                try:
+                                    orig_pass, orig_metric, orig_aggs = check_original_query_pass(
+                                        df_userQueryOut,        # the user's filtered rows
+                                        aggregations,
+                                        expression
+                                    )
+                                    print(f"[Original Query] metric={orig_metric} -> {'PASS' if orig_pass else 'FAIL'}")
+
+                                    # Save minimal info (just metric + pass/fail)
+                                    os.makedirs(outputDirectory, exist_ok=True)
+                                    metric_str = (
+                                        ";".join(map(str, orig_metric)) if isinstance(orig_metric, list)
+                                        else str(orig_metric)
+                                    )
+                                    orig_df = pd.DataFrame([{
+                                        "Original Metric": metric_str,
+                                        "Original Pass": orig_pass,
+                                    }])
+
+                                    file_path = os.path.join(outputDirectory, f"original_query_{dataName}.csv")
+                                    write_header = not os.path.exists(file_path)
+                                    orig_df.to_csv(file_path, mode="a", index=False, header=write_header)
+
+                                except Exception as e:
+                                    print("[Original Query] Evaluation error:", e)
+                                # --------------------------------------
+
+
+                                print("inputs::----", (constraint_columns, aggregations, expression, const_num))
+                                df_constraint = pd.DataFrame(df_original, columns=constraint_columns)    
+                                df_merged = pd.concat([df_predicate, df_constraint], axis=1)        # Merging the dataframes (predicates columns with constraints columns) by their index
+                                print("df_constraint", df_constraint)
+                                print("df_predicate", df_predicate)     # Merging the dataframes (predicates columns with constraints columns) by their index
+                                print("df_merged", df_merged)
+                                cluster_tree = get_clusters(df_merged.values.tolist(), bucket, branch, dataName, const_num, constraint_columns, caching)
+                                stat_start_time = time.time() 
+                                statistical_tree = get_statistical_info(cluster_tree, df_merged, aggregations, len(all_pred_possible_values), constraint_columns, dataName, dataSize, query_num, const_num, caching)
+                                stat_end_time = time.time()
+                                print("Number of Combinations: ", combination)
+                                print("Time of collecting Statistical information:", round(stat_end_time - stat_start_time, 4))
+
+                                corr_matrix = df_merged.corr()
+                                print('\n\nPredicates and Constraints correlation:\n-------------------------------------------------------\n', corr_matrix)
+
+                                
+                                # print("\n\n---------------------Brute Force--------------------")
+                                #calling Possible Candidate Lists to go through all possible refinments
+                                #PCL_list.PossibleRef_allCombination(df_merged, sorted_possible_refinments1, dataSize, dataName, k, len(all_pred_possible_values), constraint, query_num, combination) 
+
+                                # print("\n\n-------------------------FF------------------------\n")
+                                # ff_file = os.path.join(
+                                #     outputDirectory,
+                                #     f"satisfied_conditions_Fully_{dataName}_size{dataSize}_query{query_num}_constraint{constraint}_{const_num}.csv"
+                                # )
+
+                                # if os.path.exists(ff_file):
+                                #     print(f"Loading existing FF results from {ff_file}...")
+                                # else:
+                                #     print("FF results not found. Running filtered_fully...")
+                                #     filter_fully = filtered_fully()
+                                #     filter_fully.check_predicates(sorted_possible_refinments1, statistical_tree, expression, dataSize, dataName, k, query_num, const_num, constraint, op.getPredicateList(), combination, outputDirectory, bucket, branch)
+
+                                print("\n\n-------------------------RP------------------------\n")                                
+                                rp_file = os.path.join(
+                                    outputDirectory,
+                                    f"satisfied_conditions_Ranges_{dataName}_size{dataSize}_query{query_num}_constraint{constraint}_{const_num}.csv"
+                                )
+
+                                if os.path.exists(rp_file):
+                                    print(f"Loading existing RP results from {rp_file}...")
+                                else:
+                                    print("RP results not found. Running filtered_with_Ranges_generalize_topK1...")
+                                    ranges = attributesRanges1()
+                                    
+                                    #filter_ranges_partial = filtered_with_Ranges_generalize_topK1_norm()
+                                    #all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth2(df_original, op.getPredicateList(), sorted_possible_refinments1)  
+                                    all_pred_possible_Ranges= ranges.generatePossibleValues_equalWidth1(df_original, op.getPredicateList(), sorted_possible_refinments1)                                  
+                                    filter_ranges_partial = filtered_with_Ranges_generalize_topK1()
+                                    filter_ranges_partial.check_predicates(statistical_tree, all_pred_possible_Ranges, sorted_possible_refinments1, expression, dataSize, dataName, k, op.getPredicateList(), query_num, const_num, constraint, combination, outputDirectory, bucket, branch)
+                                
+                                print("\n\n-----------------------------------------\n")
+
+
+                                # Generate a unique ID based on configuration
+                                config_id = f"size{size}_constr{constraint[0]}-{constraint[1]}"
+
+                                # Log the results
+                                print("----------------------------------------------------------------------------\n")
+                                print(f"Completed run with Running configuration Id: {config_id}, size={size}, branch= {branch}, bucket= {bucket}, constraints={constraint}, top-K={k}\n")
+                                print("*********************************************************************************************\n")
+
+                                count +=1
+    
+    ''' 
+    # To generate Graphs
+    directory_path = '/Users/Shatha/Downloads/Query_Refinment_Shatha/sh_Final2/Time_vs_Constraints_H'  # Update this to your directory path
+    
+    graph = genGraph(directory_path)
+    Measures = ['Time', 'Checked Num', 'Access Num']
+    
+    inv_graphs = investigation_graphs()
+    for m in Measures:
+        #inv_graphs.Generate_Time_vs_Constraints(m) #bruteForce
+        graph.Generate_Time_vs_factors(m, "BranchNum", "ACSIncome") #Either BranchNum, BucketSize, CombinationNum and TopK
+        #graph.Generate_Time_vs_DataSize(m, "DataSize", "ACSIncome")
+        #graph.Generate_Time_vs_Constraints(m, "ACSIncome")
+        #inv_graphs.plot_time_by_constraint_Distance(m, "ACSIncome")
+    #inv_graphs.Generate_Time_vs_Constraints_Erica('Search Time', 'Preprocessing Time')
+    ''' 
+      
+if __name__ == '__main__':
+    predicates = [
+        {"field": "income", "op": ">", "value": 100},
+        {"field": "num-children", "op": ">=", "value": 2},
+        # {"field": "complications", "op": ">", "value": 3},
+    ]
+    constraints = {
+        "columns": [ "smoker", "" ], # [ "smoker", "" ]
+        "aggregations": {
+            "agg1": 'count()',
+            "agg2": 'count("smoker == 2")'
+        },
+        "expression": '0.1 <= (agg2/agg1) <= 0.2',
+        "const_num": 2
+    }
+    
+    main(
+        dataName = "Healthcare",
+        Top_k = 7,
+        predicates = predicates,
+        constraint_def = constraints,
+        caching=True
+    )
+
+

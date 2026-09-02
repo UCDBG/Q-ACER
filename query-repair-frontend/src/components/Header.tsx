@@ -1,4 +1,3 @@
-import React from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Tooltip } from '@mui/material';
 import HomeIcon from "@mui/icons-material/Home";
 import { Link, useLocation } from "react-router-dom";
@@ -13,7 +12,7 @@ export default function Header() {
       <Toolbar>
         {/* App title */}
         <Typography variant="h6" color="inherit" sx={{ flexGrow: 1 }}>
-          Query Repair System
+          Q-ACER: Query Aggregate Constraint Efficient Repair System
         </Typography>
         {showHome && (
           <Tooltip title="Home">

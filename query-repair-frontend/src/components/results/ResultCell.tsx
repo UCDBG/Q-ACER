@@ -1,7 +1,7 @@
 import { Box, Chip, Tooltip, Typography } from "@mui/material";
 import type { Bounds } from "../../utils/constraints";
 import {
-  clamp, toPct,
+  clamp,
   parseIntervalResult, computeStatusPoint, computeStatusInterval
 } from "../../utils/constraints";
 
@@ -10,7 +10,7 @@ const failColor = (theme: any) => theme.palette.error.main;
 const warnColor = (theme: any) => theme.palette.warning.main;
 
 function barDomainMax(value: number, b: Bounds): number {
-  const candidates = [value, ...(b.lb != null ? [b.lb] : []), ...(b.ub != null && b.ub < 1 ? [b.ub] : []), 0.05];
+  const candidates = [value, ...(b.lb != null ? [b.lb] : []), ...(b.ub != null ? [b.ub] : []), 0.05];
   return Math.max(...candidates);
 }
 
@@ -21,12 +21,14 @@ function MiniBar({ value, range, bounds }: { value?: number; range?: [number, nu
   return (
     <Box sx={{ position: "relative", width: 180, height: 8, borderRadius: 4, bgcolor: "grey.300" }}>
       {bounds.lb != null && bounds.lb <= domain && (
-        <Tooltip title={`Lower bound ${toPct(bounds.lb)}`}>
+        // <Tooltip title={`Lower bound ${toPct(bounds.lb)}`}>
+        <Tooltip title={`Lower bound ${bounds.lb}`}>
           <Box sx={{ position: "absolute", left: pos(bounds.lb), top: 0, bottom: 0, width: 2, bgcolor: "grey.600" }} />
         </Tooltip>
       )}
       {bounds.ub != null && bounds.ub <= domain && (
-        <Tooltip title={`Upper bound ${toPct(bounds.ub)}`}>
+        // <Tooltip title={`Upper bound ${toPct(bounds.ub)}`}>
+        <Tooltip title={`Upper bound ${bounds.ub}`}>
           <Box sx={{ position: "absolute", left: pos(bounds.ub), top: 0, bottom: 0, width: 2, bgcolor: "grey.600" }} />
         </Tooltip>
       )}
@@ -67,7 +69,8 @@ function PointResult({ value, bounds }: { value: number; bounds: Bounds }) {
     <Box display="flex" flexDirection="column" gap={0.5}>
       <Box display="flex" alignItems="center" gap={1}>
         <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-          {toPct(value)}
+          {/* {toPct(value)} */}
+          {value}
         </Typography>
         <Chip size="small" label={status} color={status === "PASS" ? "success" : "error"} variant="outlined" />
       </Box>
@@ -83,7 +86,8 @@ function RangeResult({ lo, hi, bounds }: { lo: number; hi: number; bounds: Bound
     <Box display="flex" flexDirection="column" gap={0.5}>
       <Box display="flex" alignItems="center" gap={1}>
         <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-          {toPct(lo)} - {toPct(hi)}
+          {/* {toPct(lo)} - {toPct(hi)} */}
+          {lo} - {hi}
         </Typography>
         <Chip size="small" label={status} color={chipColor as any} variant="outlined" />
       </Box>

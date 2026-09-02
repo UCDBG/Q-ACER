@@ -3,12 +3,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Explicit path to .../query-repair-backend/.env
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(ENV_PATH, override=True)
 
 app = FastAPI(
     title="Efficient Query Repair API",
     description="A web-based tool for SQL query repair with aggregate constraints using Full Filtering and Range Pruning algorithms.",
     version="1.0.0"
 )
+
+# List the URLs where your React app is running
+# origins = [
+#     "http://localhost:3000", # Local development
+# ]
 
 # Optional: allow frontend (e.g., React) to talk to this API
 app.add_middleware(

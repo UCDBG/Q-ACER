@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Link } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 const Footer: React.FC = () => {
   return (
@@ -13,7 +13,8 @@ const Footer: React.FC = () => {
       }}
     >
       <Typography variant="body2" color="text.secondary">
-        © {new Date().getFullYear()} Query Repair System. Developed as part of an MSc Computer Science project at University of Southampton.
+        © {new Date().getFullYear()} Q-ACER: Query Aggregate Constraint Efficient Repair System
+        {/*Query Repair System. Developed as part of an MSc Computer Science project at University of Southampton.*/}
       </Typography>
     </Box>
   );

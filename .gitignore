@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+**build/
+dist/
+.cache/
+.pytest_cache/
+.mypy_cache/
+*.pyo
+*.pyd
+
+# Virtual envs
+venv/
+env/
+.venv/
+
+# Editors/OS junk
+.vscode/
+.idea/
+.DS_Store
+*.sw?
+
+# Frontend (if present)
+node_modules/
+.next/
+out/
+dist/
+
+query-repair-backend/*.csv
+query-repair-backend/*.json
+query-repair-backend/query-repair-jobs/
+/.direnv/
+/query-repair-backend/backend-log.txt
+/query-repair-frontend/fontend-log.txt

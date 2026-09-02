@@ -21,27 +21,71 @@ const token = (col: string, op: string) => `${normCol(col)}:${normOp(op)}`;
 export function signatureFromSql(sql: string): string {
   if (!sql) return "";
   const re = /([A-Za-z_][A-Za-z0-9_.]*)\s*(>=|<=|==|=|>|<)\s*['"]?-?\d+(?:\.\d+)?['"]?/gi;
-  const toks: string[] = []; let m: RegExpExecArray | null;
-  while ((m = re.exec(sql)) !== null) toks.push(token(m[1], m[2]));
+  const toks: string[] = [];
+  let m: RegExpExecArray | null;
+  
+  while ((m = re.exec(sql)) !== null) {
+    // Apply normalization here too!
+    toks.push(token(normalizeCol(m[1]), m[2]));
+  }
   return toks.sort().join("|");
 }
 
+// Helper function to ensure column names match regardless of prefix or case
+function normalizeCol(col: string): string {
+  return col.toUpperCase().replace(/^NUM-/, "");
+}
+
+// Updated signatureFromRunInfo
 export function signatureFromRunInfo(qstr: string): string {
   if (!qstr) return "";
+  let toks: string[] = [];
+
   try {
+    // 1. Try parsing as JSON (handles the [['income', '<=', ...]] format)
     const json = JSON.parse(qstr.replace(/'/g, '"'));
     if (Array.isArray(json)) {
-      const toks = json
+      toks = json
         .filter((e: any) => Array.isArray(e) && e.length >= 2)
-        .map((e: any[]) => token(String(e[0]), String(e[1])));
-      return toks.sort().join("|");
+        .map((e: any[]) => token(normalizeCol(String(e[0])), String(e[1])));
     }
-  } catch {}
-  const re = /\[\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/g;
-  const toks: string[] = []; let m: RegExpExecArray | null;
-  while ((m = re.exec(qstr)) !== null) toks.push(token(m[1], m[2]));
+  } catch {
+    // 2. Fallback to Regex if not valid JSON
+    const re = /\[\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(qstr)) !== null) {
+      toks.push(token(normalizeCol(m[1]), m[2]));
+    }
+  }
+
+  // 3. Sort and join to ensure order-independence
   return toks.sort().join("|");
 }
+
+// export function signatureFromSql(sql: string): string {
+//   if (!sql) return "";
+//   const re = /([A-Za-z_][A-Za-z0-9_.]*)\s*(>=|<=|==|=|>|<)\s*['"]?-?\d+(?:\.\d+)?['"]?/gi;
+//   const toks: string[] = []; let m: RegExpExecArray | null;
+//   while ((m = re.exec(sql)) !== null) toks.push(token(m[1], m[2]));
+//   return toks.sort().join("|");
+// }
+
+// export function signatureFromRunInfo(qstr: string): string {
+//   if (!qstr) return "";
+//   try {
+//     const json = JSON.parse(qstr.replace(/'/g, '"'));
+//     if (Array.isArray(json)) {
+//       const toks = json
+//         .filter((e: any) => Array.isArray(e) && e.length >= 2)
+//         .map((e: any[]) => token(String(e[0]), String(e[1])));
+//       return toks.sort().join("|");
+//     }
+//   } catch {}
+//   const re = /\[\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/g;
+//   const toks: string[] = []; let m: RegExpExecArray | null;
+//   while ((m = re.exec(qstr)) !== null) toks.push(token(m[1], m[2]));
+//   return toks.sort().join("|");
+// }
 
 // --- Similarity helpers used by SimilarityCell ---
 type Pred = { column: string; op: string; rhs: number | null };

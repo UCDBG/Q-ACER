@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 // Material UI
 import {
   Container,
@@ -27,10 +27,9 @@ import Papa from "papaparse";
 import DatasetPreview from "../features/DatasetPreview";
 import DatasetSchema from "../features/DatasetSchema";
 // Navigation
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 // Alerts
 import AppAlert from "../components/AppAlert";
-import type { AlertColor } from "@mui/material";
 
 // ---------- Types ----------
 type Constraint = {
@@ -52,7 +51,8 @@ type Dataset = {
   file?: string; // single CSV
   files?: Record<string, string>; // multi-CSV (tpch)
 };
-
+// const API_BASE = "https://query-repair-fqepd3crc9h9ggdh.uksouth-01.azurewebsites.net"
+const API_BASE = "http://localhost:8000"
 // ---------- Datasets ----------
 const datasetConfig: Dataset[] = [
   {
@@ -133,6 +133,7 @@ export default function InputPage() {
     useState<string>("");
   const [columnTypes, setColumnTypes] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+  const location = useLocation();
   const [topK, setTopK] = useState<number>(7);
   const [isRepairing, setIsRepairing] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
@@ -140,7 +141,6 @@ export default function InputPage() {
   // Alerts
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
-  const [alertSeverity] = useState<AlertColor>("warning");
 
   const showDatasetAlert = () => {
     setAlertMsg("Please select a dataset.");
@@ -173,6 +173,26 @@ export default function InputPage() {
     setColumnTypes(inferColumnTypes(previewData));
     setIsLoading(false);
   };
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  async function pollStatus(
+    fullStatusUrl: string,
+    { interval = 10_000, timeout = 90 * 60_000 } = {} 
+  ) {
+    const start = Date.now();
+    while (true) {
+      const r = await fetch(fullStatusUrl);
+      if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
+      const data = await r.json();
+      if (data.status === "done" && data.result) return data.result;
+      if (data.status === "error") throw new Error(data.error || "Job failed");
+      
+      if (Date.now() - start > timeout)
+        throw new Error("Timed out waiting for job");
+      await sleep(interval);
+    }
+  }
 
   const withPrefix = (row: Record<string, any> | undefined, prefix: string) => {
     if (!row) return {};
@@ -455,6 +475,36 @@ export default function InputPage() {
       ensureDatasetSelected(e);
     },
   };
+
+
+  // handling edit query and constraint from the result page
+  useEffect(() => {
+    // If navigating fresh from homepage, skip restore
+    if (location.state?.fresh) return;
+
+    const stored = localStorage.getItem("queryRepairData");
+    console.log("stored:", stored);  // check if data exists
+
+    if (!stored) return;
+    const parsed = JSON.parse(stored);
+    console.log("parsed:", parsed);  // check what's being restored
+
+    if (parsed.datasetId) {
+      setSelectedDatasetId(parsed.datasetId);
+      // Also reload the dataset preview
+      const dataset = datasetConfig.find((d) => d.id === parsed.datasetId);
+      if (dataset?.file) {
+        loadSingleCsvDataset(dataset.file);
+      } else if (dataset?.files) {
+        loadTpchDataset(dataset.files);
+      }
+    }
+    if (parsed.constraintExpr) setAggregateConstraintExpr(parsed.constraintExpr);
+    if (parsed.topK) setTopK(parsed.topK);
+    if (parsed.aggregations) setAggregations(parsed.aggregations);
+    if (parsed.constraints) setConstraints(parsed.constraints);
+  }, []);
+  
 
   // ---------- Render ----------
   return (
@@ -904,6 +954,8 @@ export default function InputPage() {
               aggregations: aggregatedWithPredicates,
               constraintExpr: aggregateConstraintExpr,
               topK,
+              constraints,
+              const_num: aggregations.length,
             })
           );
 
@@ -933,15 +985,18 @@ export default function InputPage() {
                 selectedDataset?.id == "TPCH"
                   ? [aggregateConstraintExpr]
                   : aggregateConstraintExpr,
-              const_num: 3,
+              // const_num: 3,
+              const_num: aggregations.length
             },
-            output_dir: "C:/Query-Repair-System/Exp",
+            // output_dir: "C:/Query-Repair-System/Exp",
+            // output_dir: "/Users/shek21/ResearchApps/fairness-demo/query-repair-backend/Exp",
+            output_dir: "output"
           };
 
           try {
             setIsRepairing(true);
 
-            const res = await fetch("http://127.0.0.1:8000/api/v1/repair/run", {
+            const res = await fetch(`${API_BASE}/api/v1/repair/run`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
@@ -952,8 +1007,14 @@ export default function InputPage() {
               throw new Error(err?.detail || `HTTP ${res.status}`);
             }
 
-            const result = await res.json(); // conforms to RepairResult
-            localStorage.setItem("repairRunResult", JSON.stringify(result));
+            const accepted = await res.json();
+            const statusUrl = `${API_BASE}${accepted.status_url}`;
+
+            const finalResult = await pollStatus(statusUrl); 
+            localStorage.setItem(
+              "repairRunResult",
+              JSON.stringify(finalResult)
+            );
 
             // Navigate with essentials (Results can read more from localStorage if needed)
             navigate("/results", {
@@ -963,7 +1024,7 @@ export default function InputPage() {
                 columnCount: Object.keys(columnTypes).length,
                 query,
                 topK,
-                outputDir: result.output_dir,
+                outputDir: finalResult.output_dir,
               },
             });
           } catch (err: any) {
