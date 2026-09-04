@@ -118,3 +118,21 @@ agg4 := count(RAC1P == 2)
 0.3 <= (agg1/agg2) - (agg3/agg4) <= 0.5
 ```
 
+### Robust supply chain scenario (TPC-H)
+
+A retail company aims to reduce reliance on suppliers from Germany and wants to identify a type of part and part size to evaluate a diversification program for. For this part type and size the amount
+
+```sql
+SELECT *
+FROM TPCH
+WHERE p_size > 1
+      AND p_type = 31 -- 'LARGE BRUSHED BRASS'
+      AND r_name = 4 -- 'EUROPE'
+```
+
+```
+agg1 := count(Revenue >= 50000 AND n_nation == 7) # Germany
+agg2 := count(Revenue >= 50000)
+
+0.0 <= (agg1 / agg2) <= 0.03
+```
